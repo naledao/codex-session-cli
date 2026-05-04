@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Box, Text, useApp, useInput, useStdin } from 'ink';
+import { spawn } from 'child_process';
 import { SessionService } from '../services/session';
 import { SearchService } from '../services/search';
 import { ExportService } from '../services/export';
@@ -92,6 +93,8 @@ export const App: React.FC<AppProps> = ({ directory }) => {
         if (displaySessions[selectedIndex]) {
           handleSelectSession(displaySessions[selectedIndex]);
         }
+      } else if (input === 'c' && displaySessions[selectedIndex]) {
+        handleResumeSession(displaySessions[selectedIndex]);
       } else if (input === '/') {
         setView('search');
         setSearchInput('');
@@ -115,6 +118,8 @@ export const App: React.FC<AppProps> = ({ directory }) => {
         if (selectedSession && scrollOffset < selectedSession.events.length - 1) {
           setScrollOffset(prev => prev + 1);
         }
+      } else if (input === 'c' && selectedSession) {
+        handleResumeSession(selectedSession);
       } else if (input === 'e' && selectedSession) {
         handleExport(selectedSession);
       } else if (input === '/') {
@@ -171,6 +176,20 @@ export const App: React.FC<AppProps> = ({ directory }) => {
       setError(err instanceof Error ? err.message : '加载详情失败');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // 用 codex --resume 打开 session
+  const handleResumeSession = (session: Session) => {
+    try {
+      const child = spawn('cmd', ['/c', 'start', 'cmd', '/k', `codex --resume ${session.id}`], {
+        detached: true,
+        stdio: 'ignore',
+        shell: true,
+      });
+      child.unref();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '无法启动 codex');
     }
   };
 
@@ -452,8 +471,8 @@ export const App: React.FC<AppProps> = ({ directory }) => {
   // 渲染底部状态栏
   const renderFooter = () => {
     const shortcuts = {
-      list: '↑↓: 导航 | Enter: 查看 | /: 搜索 | e: 导出 | r: 刷新 | q: 退出',
-      detail: '↑↓: 滚动 | Esc: 返回 | /: 搜索 | e: 导出 | q: 退出',
+      list: '↑↓: 导航 | Enter: 查看 | c: Codex打开 | /: 搜索 | e: 导出 | r: 刷新 | q: 退出',
+      detail: '↑↓: 滚动 | Esc: 返回 | c: Codex打开 | /: 搜索 | e: 导出 | q: 退出',
       search: '输入关键词 | Enter: 搜索 | r: 切换模式 | Esc: 取消',
       export: '↑↓: 选择 | Enter: 确认 | Esc: 取消',
     };
