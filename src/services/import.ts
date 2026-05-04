@@ -1,7 +1,7 @@
 import fs from 'fs-extra';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
-import { ExportedSession, ImportResult, SessionEvent } from '../types/session';
+import { ExportedSession, ImportResult, SessionEvent, EventPayload } from '../types/session';
 import { getSessionDirectory } from '../utils/path';
 import { createLogger } from '../utils/logger';
 
@@ -10,23 +10,17 @@ type ImportFormat = 'json' | 'text' | 'markdown' | 'csv' | 'unknown';
 export class ImportService {
   private logger = createLogger('ImportService');
 
-  /**
-   * 导入会话文件
-   */
   async importSession(filePath: string): Promise<ImportResult> {
     try {
-      // 1. 验证文件存在
       if (!(await fs.pathExists(filePath))) {
         return { success: false, error: '文件不存在' };
       }
 
-      // 2. 检测格式
       const format = this.detectFormat(filePath);
       if (format === 'unknown') {
         return { success: false, error: '不支持的文件格式，请使用 .json, .txt, .md, .csv 文件' };
       }
 
-      // 3. 读取并解析文件
       const content = await fs.readFile(filePath, 'utf-8');
       const events = this.parseContent(content, format);
 
@@ -34,10 +28,7 @@ export class ImportService {
         return { success: false, error: '文件中没有找到有效的会话数据' };
       }
 
-      // 4. 生成 session 数据
-      const sessionData = this.createSessionData(events, filePath);
-
-      // 5. 写入文件
+      const sessionData = this.createSessionData(events);
       const outputPath = await this.writeSession(sessionData);
 
       this.logger.info(`Imported session to: ${outputPath}`);
@@ -56,12 +47,8 @@ export class ImportService {
     }
   }
 
-  /**
-   * 检测文件格式
-   */
   private detectFormat(filePath: string): ImportFormat {
     const ext = path.extname(filePath).toLowerCase();
-
     switch (ext) {
       case '.json':
       case '.codex-session':
@@ -77,9 +64,6 @@ export class ImportService {
     }
   }
 
-  /**
-   * 解析内容
-   */
   private parseContent(content: string, format: ImportFormat): SessionEvent[] {
     switch (format) {
       case 'json':
@@ -95,25 +79,18 @@ export class ImportService {
     }
   }
 
-  /**
-   * 解析 JSON 格式
-   */
   private parseJson(content: string): SessionEvent[] {
     try {
       const data = JSON.parse(content);
 
-      // 标准 .codex-session 格式
       if (data.version && data.events && Array.isArray(data.events)) {
         return data.events;
       }
 
-      // 简化 JSON 格式（导出的 json 格式）
       if (data.events && Array.isArray(data.events)) {
-        return data.events.map((e: any) => ({
-          timestamp: e.timestamp,
-          type: e.type,
-          payload: this.reconstructPayload(e),
-        }));
+        return data.events.map((e: any) =>
+          this.createEvent(e.payloadType || e.type || 'user_message', e.timestamp, e.content || ''),
+        );
       }
 
       return [];
@@ -122,104 +99,54 @@ export class ImportService {
     }
   }
 
-  /**
-   * 重建 payload
-   */
-  private reconstructPayload(event: any): any {
-    if (event.payloadType === 'user_message') {
-      return {
-        type: 'user_message',
-        message: event.content,
-        images: [],
-        local_images: [],
-        text_elements: [],
-      };
-    }
-    if (event.payloadType === 'agent_message') {
-      return {
-        type: 'agent_message',
-        message: event.content,
-        phase: 'response',
-        memory_citation: null,
-      };
-    }
-    if (event.payloadType === 'exec_command_end') {
-      return {
-        type: 'exec_command_end',
-        command: event.content.split(' '),
-        stdout: '',
-        stderr: '',
-        exit_code: 0,
-      };
-    }
-    if (event.payloadType === 'function_call') {
-      return { type: 'function_call', name: 'unknown', arguments: event.content, call_id: '' };
-    }
-    return event.payload || { type: event.payloadType, message: event.content };
-  }
-
-  /**
-   * 解析纯文本格式
-   */
   private parseText(content: string): SessionEvent[] {
     const events: SessionEvent[] = [];
     const lines = content.split('\n');
-    let currentEvent: Partial<SessionEvent> | null = null;
+    let currentType: string | null = null;
+    let currentTimestamp: string | null = null;
     let contentLines: string[] = [];
 
     for (const line of lines) {
-      // 检测事件类型标记
       const userMatch = line.match(/^\[User\]\s+(\d{2}:\d{2}:\d{2})/);
       const agentMatch = line.match(/^\[Agent\]\s+(\d{2}:\d{2}:\d{2})/);
       const commandMatch = line.match(/^\[Command\]\s+(\d{2}:\d{2}:\d{2})/);
       const toolMatch = line.match(/^\[Tool\]\s+(\d{2}:\d{2}:\d{2})/);
 
       if (userMatch || agentMatch || commandMatch || toolMatch) {
-        // 保存之前的事件
-        if (currentEvent && contentLines.length > 0) {
-          this.finalizeEvent(currentEvent, contentLines, events);
+        if (currentType && currentTimestamp && contentLines.length > 0) {
+          events.push(this.createEvent(currentType, currentTimestamp, contentLines.join('\n')));
         }
 
-        // 开始新事件
-        const timestamp = this.createTimestamp(
-          userMatch?.[1] || agentMatch?.[1] || commandMatch?.[1] || toolMatch?.[1],
+        currentTimestamp = this.createTimestamp(
+          userMatch?.[1] || agentMatch?.[1] || commandMatch?.[1] || toolMatch?.[1] || '00:00:00',
         );
 
-        if (userMatch) {
-          currentEvent = { timestamp, type: 'event_msg', payload: { type: 'user_message' } };
-        } else if (agentMatch) {
-          currentEvent = { timestamp, type: 'event_msg', payload: { type: 'agent_message' } };
-        } else if (commandMatch) {
-          currentEvent = { timestamp, type: 'event_msg', payload: { type: 'exec_command_end' } };
-        } else if (toolMatch) {
-          currentEvent = { timestamp, type: 'response_item', payload: { type: 'function_call' } };
-        }
+        if (userMatch) currentType = 'user_message';
+        else if (agentMatch) currentType = 'agent_message';
+        else if (commandMatch) currentType = 'exec_command_end';
+        else if (toolMatch) currentType = 'function_call';
+
         contentLines = [];
-      } else if (line.trim() && currentEvent) {
+      } else if (line.trim() && currentType) {
         contentLines.push(line);
       }
     }
 
-    // 保存最后一个事件
-    if (currentEvent && contentLines.length > 0) {
-      this.finalizeEvent(currentEvent, contentLines, events);
+    if (currentType && currentTimestamp && contentLines.length > 0) {
+      events.push(this.createEvent(currentType, currentTimestamp, contentLines.join('\n')));
     }
 
     return events;
   }
 
-  /**
-   * 解析 Markdown 格式
-   */
   private parseMarkdown(content: string): SessionEvent[] {
     const events: SessionEvent[] = [];
     const lines = content.split('\n');
-    let currentEvent: Partial<SessionEvent> | null = null;
+    let currentType: string | null = null;
+    let currentTimestamp: string | null = null;
     let contentLines: string[] = [];
-    let inCodeBlock = false;
 
     for (const line of lines) {
-      // 检测事件类型标题
       const userMatch = line.match(/^####\s+User\s+\((\d{2}:\d{2}:\d{2})\)/);
       const agentMatch = line.match(/^####\s+Agent\s+\((\d{2}:\d{2}:\d{2})\)/);
       const commandMatch = line.match(/^####\s+Command\s+\((\d{2}:\d{2}:\d{2})\)/);
@@ -227,62 +154,49 @@ export class ImportService {
       const toolOutputMatch = line.match(/^####\s+Tool Output\s+\((\d{2}:\d{2}:\d{2})\)/);
 
       if (userMatch || agentMatch || commandMatch || toolMatch || toolOutputMatch) {
-        // 保存之前的事件
-        if (currentEvent && contentLines.length > 0) {
-          this.finalizeEvent(currentEvent, contentLines, events);
+        if (currentType && currentTimestamp && contentLines.length > 0) {
+          events.push(this.createEvent(currentType, currentTimestamp, contentLines.join('\n')));
         }
 
-        const timestamp = this.createTimestamp(
+        currentTimestamp = this.createTimestamp(
           userMatch?.[1] ||
             agentMatch?.[1] ||
             commandMatch?.[1] ||
             toolMatch?.[1] ||
-            toolOutputMatch?.[1],
+            toolOutputMatch?.[1] ||
+            '00:00:00',
         );
 
-        if (userMatch) {
-          currentEvent = { timestamp, type: 'event_msg', payload: { type: 'user_message' } };
-        } else if (agentMatch) {
-          currentEvent = { timestamp, type: 'event_msg', payload: { type: 'agent_message' } };
-        } else if (commandMatch) {
-          currentEvent = { timestamp, type: 'event_msg', payload: { type: 'exec_command_end' } };
-        } else if (toolMatch) {
-          currentEvent = { timestamp, type: 'response_item', payload: { type: 'function_call' } };
-        } else if (toolOutputMatch) {
-          currentEvent = {
-            timestamp,
-            type: 'response_item',
-            payload: { type: 'function_call_output' },
-          };
-        }
+        if (userMatch) currentType = 'user_message';
+        else if (agentMatch) currentType = 'agent_message';
+        else if (commandMatch) currentType = 'exec_command_end';
+        else if (toolMatch) currentType = 'function_call';
+        else if (toolOutputMatch) currentType = 'function_call_output';
+
         contentLines = [];
-        inCodeBlock = false;
-      } else if (line.trim() === '```' || line.trim().startsWith('```')) {
-        inCodeBlock = !inCodeBlock;
-        if (!inCodeBlock && currentEvent) {
-          // 代码块结束
-        }
-      } else if (line.trim() && currentEvent && !line.startsWith('#') && !line.startsWith('|')) {
+      } else if (
+        line.trim() &&
+        currentType &&
+        !line.startsWith('#') &&
+        !line.startsWith('|') &&
+        line.trim() !== '```' &&
+        !line.trim().startsWith('```')
+      ) {
         contentLines.push(line);
       }
     }
 
-    // 保存最后一个事件
-    if (currentEvent && contentLines.length > 0) {
-      this.finalizeEvent(currentEvent, contentLines, events);
+    if (currentType && currentTimestamp && contentLines.length > 0) {
+      events.push(this.createEvent(currentType, currentTimestamp, contentLines.join('\n')));
     }
 
     return events;
   }
 
-  /**
-   * 解析 CSV 格式
-   */
   private parseCsv(content: string): SessionEvent[] {
     const events: SessionEvent[] = [];
     const lines = content.split('\n');
 
-    // 跳过表头
     for (let i = 1; i < lines.length; i++) {
       const line = lines[i].trim();
       if (!line) continue;
@@ -291,28 +205,13 @@ export class ImportService {
       if (parts.length >= 3) {
         const [timestamp, type, ...contentParts] = parts;
         const eventContent = contentParts.join(',');
-
-        events.push({
-          timestamp,
-          type:
-            type === 'function_call' || type === 'function_call_output'
-              ? 'response_item'
-              : 'event_msg',
-          payload: this.reconstructPayload({
-            timestamp,
-            payloadType: type,
-            content: eventContent,
-          }),
-        });
+        events.push(this.createEvent(type, timestamp, eventContent));
       }
     }
 
     return events;
   }
 
-  /**
-   * 解析 CSV 行
-   */
   private parseCsvLine(line: string): string[] {
     const parts: string[] = [];
     let current = '';
@@ -320,7 +219,6 @@ export class ImportService {
 
     for (let i = 0; i < line.length; i++) {
       const char = line[i];
-
       if (char === '"') {
         if (inQuotes && line[i + 1] === '"') {
           current += '"';
@@ -340,51 +238,74 @@ export class ImportService {
     return parts;
   }
 
-  /**
-   * 完善事件
-   */
-  private finalizeEvent(
-    event: Partial<SessionEvent>,
-    contentLines: string[],
-    events: SessionEvent[],
-  ): void {
-    const content = contentLines.join('\n');
+  private createEvent(type: string, timestamp: string, content: string): SessionEvent {
+    let payload: EventPayload;
 
-    if (event.payload?.type === 'user_message') {
-      event.payload = {
-        type: 'user_message',
-        message: content,
-        images: [],
-        local_images: [],
-        text_elements: [],
-      };
-    } else if (event.payload?.type === 'agent_message') {
-      event.payload = {
-        type: 'agent_message',
-        message: content,
-        phase: 'response',
-        memory_citation: null,
-      };
-    } else if (event.payload?.type === 'exec_command_end') {
-      event.payload = {
-        type: 'exec_command_end',
-        command: content.split(' '),
-        stdout: '',
-        stderr: '',
-        exit_code: 0,
-      };
-    } else if (event.payload?.type === 'function_call') {
-      event.payload = { type: 'function_call', name: 'unknown', arguments: content, call_id: '' };
-    } else if (event.payload?.type === 'function_call_output') {
-      event.payload = { type: 'function_call_output', call_id: '', output: content };
+    switch (type) {
+      case 'user_message':
+        payload = {
+          type: 'user_message',
+          message: content,
+          images: [],
+          local_images: [],
+          text_elements: [],
+        } as EventPayload;
+        break;
+      case 'agent_message':
+        payload = {
+          type: 'agent_message',
+          message: content,
+          phase: 'response',
+          memory_citation: null,
+        } as EventPayload;
+        break;
+      case 'exec_command_end':
+        payload = {
+          type: 'exec_command_end',
+          call_id: '',
+          turn_id: '',
+          command: content.split(' '),
+          cwd: '',
+          parsed_cmd: [],
+          source: 'agent',
+          stdout: '',
+          stderr: '',
+          aggregated_output: '',
+          exit_code: 0,
+          duration: { secs: 0, nanos: 0 },
+          formatted_output: '',
+          status: 'completed',
+        } as EventPayload;
+        break;
+      case 'function_call':
+        payload = {
+          type: 'function_call',
+          name: 'unknown',
+          arguments: content,
+          call_id: '',
+        } as EventPayload;
+        break;
+      case 'function_call_output':
+        payload = { type: 'function_call_output', call_id: '', output: content } as EventPayload;
+        break;
+      default:
+        payload = {
+          type: 'user_message',
+          message: content,
+          images: [],
+          local_images: [],
+          text_elements: [],
+        } as EventPayload;
     }
 
-    events.push(event as SessionEvent);
+    return {
+      timestamp,
+      type:
+        type === 'function_call' || type === 'function_call_output' ? 'response_item' : 'event_msg',
+      payload,
+    };
   }
 
-  /**
-   * 创建时间戳
-   */
   private createTimestamp(timeStr: string): string {
     const today = new Date();
     const [hours, minutes, seconds] = timeStr.split(':').map(Number);
@@ -392,10 +313,7 @@ export class ImportService {
     return today.toISOString();
   }
 
-  /**
-   * 创建 session 数据
-   */
-  private createSessionData(events: SessionEvent[], filePath: string): ExportedSession {
+  private createSessionData(events: SessionEvent[]): ExportedSession {
     const firstEvent = events[0];
     const lastEvent = events[events.length - 1];
 
@@ -427,9 +345,6 @@ export class ImportService {
     };
   }
 
-  /**
-   * 提取摘要
-   */
   private extractSummary(events: SessionEvent[]): string {
     const userMessage = events.find(e => e.payload.type === 'user_message');
     if (userMessage && 'message' in userMessage.payload) {
@@ -439,9 +354,6 @@ export class ImportService {
     return 'Imported session';
   }
 
-  /**
-   * 写入 session 文件
-   */
   private async writeSession(data: ExportedSession): Promise<string> {
     const sessionDir = getSessionDirectory();
     await fs.ensureDir(sessionDir);
@@ -457,9 +369,6 @@ export class ImportService {
     return outputPath;
   }
 
-  /**
-   * 验证文件
-   */
   async validateFile(filePath: string): Promise<{
     valid: boolean;
     format?: ImportFormat;
