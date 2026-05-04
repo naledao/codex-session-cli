@@ -1,9 +1,11 @@
 import fs from 'fs-extra';
 import path from 'path';
-import { ExportFormat, SessionDetail, SessionEvent } from '@/types/session';
+import { ExportFormat, SessionDetail, SessionEvent, ExportedSession } from '@/types/session';
 import { SessionService } from './session';
 import { createLogger } from '@/utils/logger';
 import { formatDate, formatDuration } from '@/utils/format';
+
+const pkg = { version: '1.1.1' };
 
 export class ExportService {
   private sessionService: SessionService;
@@ -402,5 +404,56 @@ export class ExportService {
     }
 
     return null;
+  }
+
+  // ==================== 标准化会话格式 ====================
+
+  /**
+   * 导出为标准化会话格式（.codex-session）
+   * 用于跨设备共享和导入
+   */
+  async exportAsSession(sessionId: string): Promise<string> {
+    const session = await this.sessionService.getSessionById(sessionId);
+    if (!session) {
+      throw new Error(`Session not found: ${sessionId}`);
+    }
+
+    const exportData: ExportedSession = {
+      version: '1.0',
+      exportedAt: new Date().toISOString(),
+      exportedBy: `codex-session-cli@${pkg.version}`,
+      session: {
+        id: session.id,
+        directory: session.directory,
+        timestamp: session.timestamp.toISOString(),
+        summary: session.summary,
+        messageCount: session.messageCount,
+        duration: session.duration,
+      },
+      events: session.events,
+      metadata: session.metadata,
+    };
+
+    return JSON.stringify(exportData, null, 2);
+  }
+
+  /**
+   * 导出会话到 .codex-session 文件
+   */
+  async exportSessionToFile(sessionId: string, outputDir?: string): Promise<string> {
+    const content = await this.exportAsSession(sessionId);
+    const dir = outputDir || process.cwd();
+
+    // 生成文件名
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 19);
+    const shortId = sessionId.substring(0, 8);
+    const fileName = `session-${timestamp}-${shortId}.codex-session`;
+    const outputPath = path.join(dir, fileName);
+
+    await fs.ensureDir(dir);
+    await fs.writeFile(outputPath, content, 'utf-8');
+    this.logger.info(`Exported session to: ${outputPath}`);
+
+    return outputPath;
   }
 }

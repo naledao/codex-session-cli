@@ -4,10 +4,11 @@ import { spawn } from 'child_process';
 import { SessionService } from '../services/session';
 import { SearchService } from '../services/search';
 import { ExportService } from '../services/export';
+import { ImportService } from '../services/import';
 import { Session, SessionDetail, ExportFormat } from '../types/session';
 import { formatDate, formatDuration } from '../utils/format';
 
-type View = 'list' | 'detail' | 'search' | 'export';
+type View = 'list' | 'detail' | 'search' | 'export' | 'import';
 
 interface AppProps {
   directory?: string;
@@ -34,11 +35,16 @@ export const App: React.FC<AppProps> = ({ directory }) => {
   const [exporting, setExporting] = useState(false);
   const [exportMessage, setExportMessage] = useState('');
 
+  const [importing, setImporting] = useState(false);
+  const [importInput, setImportInput] = useState('');
+  const [importMessage, setImportMessage] = useState('');
+
   const [scrollOffset, setScrollOffset] = useState(0);
 
   const sessionService = new SessionService();
   const searchService = new SearchService();
   const exportService = new ExportService();
+  const importService = new ImportService();
 
   // 进入 alternate screen 并清屏
   useEffect(() => {
@@ -114,6 +120,10 @@ export const App: React.FC<AppProps> = ({ directory }) => {
         setSearchInput('');
       } else if (input === 'e' && displaySessions[selectedIndex]) {
         handleExport(displaySessions[selectedIndex]);
+      } else if (input === 'i') {
+        setView('import');
+        setImportInput('');
+        setImportMessage('');
       } else if (input === 'r') {
         loadSessions();
         setSearchQuery('');
@@ -166,6 +176,19 @@ export const App: React.FC<AppProps> = ({ directory }) => {
         setExportIndex(prev => Math.min(4, prev + 1));
       } else if (key.return) {
         handleExportConfirm();
+      }
+    }
+
+    if (view === 'import') {
+      if (key.escape) {
+        setView('list');
+        setImportInput('');
+      } else if (key.return) {
+        handleImport();
+      } else if (key.backspace || key.delete) {
+        setImportInput(prev => prev.slice(0, -1));
+      } else if (input && !key.ctrl && !key.meta) {
+        setImportInput(prev => prev + input);
       }
     }
   });
@@ -275,6 +298,32 @@ export const App: React.FC<AppProps> = ({ directory }) => {
       setExportMessage(`导出失败: ${err instanceof Error ? err.message : '未知错误'}`);
     } finally {
       setExporting(false);
+    }
+  };
+
+  const handleImport = async () => {
+    if (!importInput.trim()) return;
+
+    try {
+      setImporting(true);
+      setImportMessage('');
+
+      const result = await importService.importSession(importInput.trim());
+
+      if (result.success) {
+        setImportMessage('导入成功！');
+        await loadSessions();
+        setTimeout(() => {
+          setView('list');
+          setImportMessage('');
+        }, 1500);
+      } else {
+        setImportMessage(`导入失败: ${result.error}`);
+      }
+    } catch (err) {
+      setImportMessage(`导入失败: ${err instanceof Error ? err.message : '未知错误'}`);
+    } finally {
+      setImporting(false);
     }
   };
 
@@ -517,12 +566,46 @@ export const App: React.FC<AppProps> = ({ directory }) => {
     );
   };
 
+  const renderImportPanel = () => (
+    <Box flexDirection="column" borderStyle="double" borderColor="yellow" padding={1} width="100%">
+      <Text bold color="yellow">
+        导入会话
+      </Text>
+
+      <Box marginTop={1}>
+        <Text>文件路径: {importInput}</Text>
+        <Text color="gray">_</Text>
+      </Box>
+
+      {importMessage ? (
+        <Box marginTop={1}>
+          <Text color={importMessage.startsWith('导入成功') ? 'green' : 'red'}>
+            {importMessage}
+          </Text>
+        </Box>
+      ) : importing ? (
+        <Box marginTop={1}>
+          <Text color="yellow">导入中...</Text>
+        </Box>
+      ) : (
+        <Box marginTop={1}>
+          <Text color="gray">输入 .codex-session 文件的完整路径</Text>
+        </Box>
+      )}
+
+      <Box marginTop={1}>
+        <Text color="gray">Enter: 确认导入 | Esc: 取消</Text>
+      </Box>
+    </Box>
+  );
+
   const renderFooter = () => {
     const shortcuts = {
-      list: '↑↓ 导航 | Enter 查看 | c Codex打开 | / 搜索 | e 导出 | r 刷新 | q 退出',
+      list: '↑↓ 导航 | Enter 查看 | c Codex打开 | / 搜索 | e 导出 | i 导入 | r 刷新 | q 退出',
       detail: '↑↓ 滚动 | Esc 返回 | c Codex打开 | / 搜索 | e 导出 | q 退出',
       search: 'Enter 搜索 | r 切换模式 | Esc 取消',
       export: '↑↓ 选择 | Enter 确认 | Esc 取消',
+      import: '输入文件路径 | Enter 确认 | Esc 取消',
     };
 
     return (
@@ -555,13 +638,15 @@ export const App: React.FC<AppProps> = ({ directory }) => {
           </Box>
         </Box>
 
-        {/* 右侧面板 - 详情/搜索/导出 */}
+        {/* 右侧面板 - 详情/搜索/导出/导入 */}
         <Box flexDirection="column" flexGrow={1} borderStyle="single" borderColor="blue">
           {view === 'search'
             ? renderSearchPanel()
             : view === 'export'
               ? renderExportPanel()
-              : renderSessionDetail()}
+              : view === 'import'
+                ? renderImportPanel()
+                : renderSessionDetail()}
         </Box>
       </Box>
 

@@ -246,3 +246,28 @@ export interface SessionSummary {
   agentMessageCount: number;
   totalEvents: number;
 }
+
+// 导出的会话文件格式（.codex-session）
+export interface ExportedSession {
+  version: string;
+  exportedAt: string;
+  exportedBy: string;
+  session: {
+    id: string;
+    directory: string;
+    timestamp: string;
+    summary: string;
+    messageCount: number;
+    duration: number;
+  };
+  events: SessionEvent[];
+  metadata: SessionMetadata;
+}
+
+// 导入结果
+export interface ImportResult {
+  success: boolean;
+  sessionId?: string;
+  filePath?: string;
+  error?: string;
+}
