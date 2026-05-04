@@ -1,6 +1,6 @@
 {
   "name": "codex-session-cli",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "description": "一个跨平台的终端工具，用于查看OpenAI Codex CLI在当前目录下的历史session记录",
   "main": "dist/index.mjs",
   "bin": {
