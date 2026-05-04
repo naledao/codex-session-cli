@@ -179,10 +179,10 @@ export const App: React.FC<AppProps> = ({ directory }) => {
     }
   };
 
-  // 用 codex --resume 打开 session
+  // 用 codex resume 打开 session
   const handleResumeSession = (session: Session) => {
     try {
-      const child = spawn('cmd', ['/c', 'start', 'cmd', '/k', `codex --resume ${session.id}`], {
+      const child = spawn('cmd', ['/c', 'start', 'cmd', '/k', 'codex resume'], {
         detached: true,
         stdio: 'ignore',
         shell: true,
