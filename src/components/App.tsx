@@ -7,7 +7,7 @@ import { SearchService } from '../services/search';
 import { ExportService } from '../services/export';
 import { ImportService } from '../services/import';
 import { Session, SessionDetail, ExportFormat } from '../types/session';
-import { formatDate, formatDuration } from '../utils/format';
+import { formatDate, formatDuration, formatFileSize } from '../utils/format';
 
 type View = 'list' | 'detail' | 'search' | 'export' | 'import';
 
@@ -411,9 +411,10 @@ export const App: React.FC<AppProps> = ({ directory }) => {
               inverse={index === selectedIndex}
             >
               {index === selectedIndex ? ' > ' : '   '}
-              {formatDate(session.timestamp, 'yyyy-MM-dd HH:mm')}
+              {formatDate(session.timestamp, 'yyyy-MM-dd HH:mm')}{' '}
+              <Text color="gray">[{formatFileSize(session.fileSize)}]</Text>
               {' - '}
-              {session.summary.substring(0, 40)}
+              {session.summary.substring(0, 35)}
             </Text>
           </Box>
         ))}
@@ -452,6 +453,9 @@ export const App: React.FC<AppProps> = ({ directory }) => {
             </Text>
             <Text>
               <Text color="yellow">时长:</Text> {formatDuration(session.duration)}
+            </Text>
+            <Text>
+              <Text color="yellow">大小:</Text> {formatFileSize(session.fileSize)}
             </Text>
           </Box>
           <Box marginTop={1}>

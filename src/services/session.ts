@@ -220,6 +220,10 @@ export class SessionService {
         return null;
       }
 
+      // 获取文件大小
+      const stats = await fs.stat(filePath);
+      const fileSize = stats.size;
+
       // 提取摘要和目录（从文件名和第一行推断）
       const { summary, directory, messageCount } = await this.extractBasicInfo(filePath);
 
@@ -231,6 +235,7 @@ export class SessionService {
         summary,
         messageCount,
         duration: 0,
+        fileSize,
         tags: [],
       };
     } catch (error) {

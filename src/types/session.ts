@@ -7,6 +7,7 @@ export interface Session {
   summary: string;
   messageCount: number;
   duration: number; // 毫秒
+  fileSize: number; // 字节
   tags: string[];
 }
 
