@@ -29,6 +29,9 @@ export class ImportService {
       }
 
       const sessionData = this.createSessionData(events);
+      // 将目录设置为当前目录
+      sessionData.session.directory = process.cwd();
+      sessionData.metadata.directory = process.cwd();
       const outputPath = await this.writeSession(sessionData);
 
       this.logger.info(`Imported session to: ${outputPath}`);
