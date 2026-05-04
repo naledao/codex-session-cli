@@ -64,12 +64,8 @@ export class SessionService {
         const normalizedSessionDir = path.resolve(session.directory);
         const normalizedCurrentDir = path.resolve(currentDir);
 
-        // 检查 session 目录是否与当前目录相同或是其子目录
-        return (
-          normalizedSessionDir === normalizedCurrentDir ||
-          normalizedSessionDir.startsWith(normalizedCurrentDir + path.sep) ||
-          normalizedCurrentDir.startsWith(normalizedSessionDir + path.sep)
-        );
+        // 只显示精确匹配当前目录的 session
+        return normalizedSessionDir === normalizedCurrentDir;
       } catch {
         return false;
       }
