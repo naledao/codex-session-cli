@@ -222,11 +222,16 @@ export const App: React.FC<AppProps> = ({ directory }) => {
   const handleResumeSession = (session: Session) => {
     try {
       const uuid = session.id.split('-').slice(-5).join('-');
-      const child = spawn('cmd', ['/c', 'start', 'cmd', '/k', `codex resume ${uuid}`], {
-        detached: true,
-        stdio: 'ignore',
-        shell: true,
-      });
+      const currentDir = process.cwd();
+      const child = spawn(
+        'cmd',
+        ['/c', 'start', 'cmd', '/k', `codex resume ${uuid} -C "${currentDir}"`],
+        {
+          detached: true,
+          stdio: 'ignore',
+          shell: true,
+        },
+      );
       child.unref();
     } catch (err) {
       setError(err instanceof Error ? err.message : '无法启动 codex');
@@ -338,7 +343,8 @@ export const App: React.FC<AppProps> = ({ directory }) => {
   const handleCopyCommand = async (session: Session) => {
     try {
       const uuid = session.id.split('-').slice(-5).join('-');
-      const command = `codex resume ${uuid}`;
+      const currentDir = process.cwd();
+      const command = `codex resume ${uuid} -C "${currentDir}"`;
       await clipboard.write(command);
       setCopyMessage(`已复制: ${command}`);
       setTimeout(() => setCopyMessage(''), 2000);
