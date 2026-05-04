@@ -255,6 +255,7 @@ export const App: React.FC<AppProps> = ({ directory }) => {
           summary: r.matchedText.substring(0, 50),
           messageCount: 0,
           duration: 0,
+          fileSize: 0,
           tags: [],
         })),
       );
