@@ -1,5 +1,19 @@
 export * from './session';
 
+import {
+  Session,
+  SessionDetail,
+  SessionEvent,
+  SessionMetadata,
+  SessionStats,
+  SessionSummary,
+  SearchQuery,
+  SearchResult,
+  ExportFormat,
+  ExportOptions,
+  Config,
+} from './session';
+
 // 命令行参数类型
 export interface ListCommandOptions {
   all?: boolean;

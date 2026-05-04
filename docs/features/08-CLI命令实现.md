@@ -8,16 +8,18 @@
 
 **优先级：P0（必须）**  
 **预计时间：2-3天**  
-**前置依赖：04-Session数据服务、06-搜索服务、07-导出服务**
+**前置依赖：04-Session数据服务、06-搜索服务、07-导出服务**  
+**完成日期：2026-04-30**  
+**状态：✅ 已完成**
 
 ## 文件位置
 
-- `src/commands/list.ts` - 列出 session 命令
-- `src/commands/view.ts` - 查看 session 详情命令
-- `src/commands/search.ts` - 搜索 session 命令
-- `src/commands/export.ts` - 导出 session 命令
-- `src/commands/tui.ts` - TUI 界面命令
-- `src/commands/index.ts` - 命令导出
+- `src/commands/list.ts` - 列出 session 命令 ✅
+- `src/commands/view.ts` - 查看 session 详情命令 ✅
+- `src/commands/search.ts` - 搜索 session 命令 ✅
+- `src/commands/export.ts` - 导出 session 命令 ✅
+- `src/commands/tui.ts` - TUI 界面命令 ✅
+- `src/commands/index.ts` - 命令导出 ✅
 
 ---
 
@@ -609,17 +611,17 @@ codex-sessions tui --theme dark
 
 ## 完成标准
 
-- [x] list 命令已实现
-- [x] view 命令已实现
-- [x] search 命令已实现
-- [x] export 命令已实现
-- [x] tui 命令已实现
-- [x] 命令导出正确
-- [x] 主入口已更新
-- [x] 所有命令有帮助信息
-- [x] 错误处理完善
-- [x] 有使用示例
-- [x] 无 TypeScript 编译错误
+- [x] list 命令已实现 ✅ 2026-04-30
+- [x] view 命令已实现 ✅ 2026-04-30
+- [x] search 命令已实现 ✅ 2026-04-30
+- [x] export 命令已实现 ✅ 2026-04-30
+- [x] tui 命令已实现 ✅ 2026-04-30
+- [x] 命令导出正确 ✅ 2026-04-30
+- [x] 主入口已更新 ✅ 2026-04-30
+- [x] 所有命令有帮助信息 ✅ 2026-04-30
+- [x] 错误处理完善 ✅ 2026-04-30
+- [x] 有使用示例 ✅ 2026-04-30
+- [x] 无 TypeScript 编译错误 ✅ 2026-04-30
 
 ## 下一步
 

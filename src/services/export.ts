@@ -1,60 +1,16 @@
-# 07 - 导出服务
-
-## 概述
-
-本文档描述导出服务的实现。该服务负责将 session 导出为多种格式。
-
-## 开发顺序
-
-**优先级：P0（必须）**  
-**预计时间：1-2天**  
-**前置依赖：04-Session数据服务、05-JSONL解析服务**  
-**完成日期：2026-04-30**  
-**状态：✅ 已完成**
-
-## 文件位置
-
-- `src/services/export.ts` - 导出服务 ✅
-
----
-
-## 7.1 支持的导出格式
-
-| 格式 | 说明 | 文件扩展名 |
-|------|------|-----------|
-| json | JSON 格式 | .json |
-| text | 纯文本格式 | .txt |
-| markdown | Markdown 格式 | .md |
-| csv | CSV 格式 | .csv |
-
----
-
-## 7.2 类设计
-
-### ExportService 类
-
-```typescript
 import fs from 'fs-extra';
 import path from 'path';
-import {
-  ExportFormat,
-  ExportOptions,
-  SessionDetail,
-  SessionEvent,
-} from '@/types/session';
+import { ExportFormat, SessionDetail, SessionEvent } from '@/types/session';
 import { SessionService } from './session';
-import { ParserService } from './parser';
 import { createLogger } from '@/utils/logger';
 import { formatDate, formatDuration } from '@/utils/format';
 
 export class ExportService {
   private sessionService: SessionService;
-  private parserService: ParserService;
   private logger = createLogger('ExportService');
 
   constructor() {
     this.sessionService = new SessionService();
-    this.parserService = new ParserService();
   }
 
   /**
@@ -83,10 +39,7 @@ export class ExportService {
   /**
    * 批量导出
    */
-  async exportMultipleSessions(
-    sessionIds: string[],
-    format: ExportFormat
-  ): Promise<string> {
+  async exportMultipleSessions(sessionIds: string[], format: ExportFormat): Promise<string> {
     const sessions: SessionDetail[] = [];
 
     for (const sessionId of sessionIds) {
@@ -117,11 +70,7 @@ export class ExportService {
   /**
    * 导出到文件
    */
-  async exportToFile(
-    sessionId: string,
-    format: ExportFormat,
-    outputPath: string
-  ): Promise<void> {
+  async exportToFile(sessionId: string, format: ExportFormat, outputPath: string): Promise<void> {
     const content = await this.exportSession(sessionId, format);
     await fs.ensureDir(path.dirname(outputPath));
     await fs.writeFile(outputPath, content, 'utf-8');
@@ -134,7 +83,7 @@ export class ExportService {
   async exportMultipleToFile(
     sessionIds: string[],
     format: ExportFormat,
-    outputDir: string
+    outputDir: string,
   ): Promise<string[]> {
     const outputPaths: string[] = [];
 
@@ -291,8 +240,8 @@ export class ExportService {
     lines.push('');
     lines.push('## Metadata');
     lines.push('');
-    lines.push(`| Key | Value |`);
-    lines.push(`|-----|-------|`);
+    lines.push('| Key | Value |');
+    lines.push('|-----|-------|');
     lines.push(`| ID | ${session.id} |`);
     lines.push(`| Date | ${formatDate(session.timestamp)} |`);
     lines.push(`| Directory | ${session.directory} |`);
@@ -447,8 +396,6 @@ export class ExportService {
           return event.payload.arguments;
         case 'function_call_output':
           return event.payload.output;
-        case 'message':
-          return event.payload.content?.map(c => c.text).join(' ') || null;
         default:
           return null;
       }
@@ -457,208 +404,3 @@ export class ExportService {
     return null;
   }
 }
-```
-
----
-
-## 7.3 使用示例
-
-### 导出为 JSON
-
-```typescript
-import { ExportService } from '@/services/export';
-
-const exportService = new ExportService();
-
-// 导出单个 session
-const json = await exportService.exportSession('session-id', 'json');
-console.log(json);
-
-// 导出到文件
-await exportService.exportToFile('session-id', 'json', './export/session.json');
-```
-
-### 导出为 Markdown
-
-```typescript
-import { ExportService } from '@/services/export';
-
-const exportService = new ExportService();
-
-// 导出为 Markdown
-const markdown = await exportService.exportSession('session-id', 'markdown');
-console.log(markdown);
-
-// 导出到文件
-await exportService.exportToFile('session-id', 'markdown', './export/session.md');
-```
-
-### 批量导出
-
-```typescript
-import { ExportService } from '@/services/export';
-
-const exportService = new ExportService();
-
-// 批量导出
-const sessionIds = ['session-1', 'session-2', 'session-3'];
-const json = await exportService.exportMultipleSessions(sessionIds, 'json');
-console.log(json);
-
-// 批量导出到文件
-const outputPaths = await exportService.exportMultipleToFile(
-  sessionIds,
-  'json',
-  './export'
-);
-console.log('Exported to:', outputPaths);
-```
-
-### 获取支持的格式
-
-```typescript
-import { ExportService } from '@/services/export';
-
-const exportService = new ExportService();
-const formats = exportService.getSupportedFormats();
-console.log('Supported formats:', formats);
-// ['json', 'text', 'markdown', 'csv']
-```
-
----
-
-## 7.4 导出格式示例
-
-### JSON 格式示例
-
-```json
-{
-  "id": "rollout-2026-04-02T10-00-10-019d4beb",
-  "timestamp": "2026-04-02T10:00:10.000Z",
-  "directory": "/path/to/project",
-  "summary": "User asked about database migration",
-  "duration": 300000,
-  "messageCount": 10,
-  "metadata": {
-    "sessionId": "rollout-2026-04-02T10-00-10-019d4beb",
-    "startTime": "2026-04-02T10:00:10.000Z",
-    "endTime": "2026-04-02T10:05:10.000Z",
-    "directory": "/path/to/project",
-    "model": "gpt-5.4",
-    "totalTokens": 1500,
-    "userMessageCount": 5,
-    "agentMessageCount": 5,
-    "functionCallCount": 3
-  },
-  "events": [
-    {
-      "timestamp": "2026-04-02T10:00:10.000Z",
-      "type": "event_msg",
-      "payloadType": "user_message",
-      "content": "How do I migrate the database?"
-    }
-  ]
-}
-```
-
-### Markdown 格式示例
-
-```markdown
-# Session: rollout-2026-04-02T10-00-10-019d4beb
-
-## Metadata
-
-| Key | Value |
-|-----|-------|
-| ID | rollout-2026-04-02T10-00-10-019d4beb |
-| Date | 2026-04-02 10:00 |
-| Directory | /path/to/project |
-| Duration | 5m 0s |
-| Messages | 10 |
-
-## Conversation
-
-#### User (10:00:10)
-
-How do I migrate the database?
-
-#### Agent (10:00:15)
-
-I'll help you with the database migration...
-```
-
-### 纯文本格式示例
-
-```
-============================================================
-Session: rollout-2026-04-02T10-00-10-019d4beb
-Date: 2026-04-02 10:00
-Directory: /path/to/project
-Duration: 5m 0s
-Messages: 10
-============================================================
-
-[User] 10:00:10
-How do I migrate the database?
-
-[Agent] 10:00:15
-I'll help you with the database migration...
-```
-
----
-
-## 7.5 错误处理
-
-### 常见错误
-
-1. **Session 不存在**
-   - 处理：抛出 `SessionNotFoundError`
-   - 建议：先检查 session 存在性
-
-2. **格式不支持**
-   - 处理：抛出 `UnsupportedFormatError`
-   - 建议：使用 `getSupportedFormats()` 检查
-
-3. **文件写入失败**
-   - 处理：抛出 `FileWriteError`
-   - 建议：检查目录权限
-
-### 错误处理示例
-
-```typescript
-import { ExportService } from '@/services/export';
-
-const exportService = new ExportService();
-
-try {
-  await exportService.exportToFile('session-id', 'json', './export/session.json');
-} catch (error) {
-  if (error.message.includes('not found')) {
-    console.error('Session not found');
-  } else if (error.message.includes('permission')) {
-    console.error('Permission denied');
-  } else {
-    console.error('Export failed:', error);
-  }
-}
-```
-
----
-
-## 完成标准
-
-- [x] ExportService 类已实现 ✅ 2026-04-30
-- [x] exportSession 方法工作正常 ✅ 2026-04-30
-- [x] exportMultipleSessions 方法工作正常 ✅ 2026-04-30
-- [x] exportToFile 方法工作正常 ✅ 2026-04-30
-- [x] 支持 JSON 格式 ✅ 2026-04-30
-- [x] 支持纯文本格式 ✅ 2026-04-30
-- [x] 支持 Markdown 格式 ✅ 2026-04-30
-- [x] 支持 CSV 格式 ✅ 2026-04-30
-- [x] 错误处理完善 ✅ 2026-04-30
-- [x] 有使用示例 ✅ 2026-04-30
-- [x] 无 TypeScript 编译错误 ✅ 2026-04-30
-
-## 下一步
-
-完成本文档后，继续进行 [08-CLI命令实现](./08-CLI命令实现.md)。

@@ -1,61 +1,7 @@
-# 06 - 搜索服务
-
-## 概述
-
-本文档描述搜索服务的实现。该服务负责在 session 中搜索内容，支持多种过滤条件。
-
-## 开发顺序
-
-**优先级：P0（必须）**  
-**预计时间：1-2天**  
-**前置依赖：04-Session数据服务、05-JSONL解析服务**  
-**完成日期：2026-04-30**  
-**状态：✅ 已完成**
-
-## 文件位置
-
-- `src/services/search.ts` - 搜索服务 ✅
-
----
-
-## 6.1 功能概述
-
-### 核心功能
-- 全文搜索 session 内容
-- 按时间范围过滤
-- 按消息类型过滤
-- 正则表达式支持
-- 搜索结果高亮
-- 搜索历史管理
-
-### 搜索选项
-- `query` - 搜索关键词
-- `directory` - 目录过滤
-- `afterDate` - 开始日期
-- `beforeDate` - 结束日期
-- `messageType` - 消息类型（user/agent/all）
-- `useRegex` - 使用正则表达式
-- `limit` - 结果数量限制
-- `offset` - 偏移量
-
----
-
-## 6.2 类设计
-
-### SearchService 类
-
-```typescript
-import fs from 'fs-extra';
-import path from 'path';
-import {
-  SearchQuery,
-  SearchResult,
-  SessionEvent,
-} from '@/types/session';
+import { SearchQuery, SearchResult, SessionEvent } from '@/types/session';
 import { SessionService } from './session';
 import { ParserService } from './parser';
 import { createLogger } from '@/utils/logger';
-import { formatDate } from '@/utils/format';
 import { isDateInRange } from '@/utils/date';
 
 export class SearchService {
@@ -81,15 +27,13 @@ export class SearchService {
 
       // 按目录过滤
       if (query.directory) {
-        sessions = sessions.filter(s => 
-          s.directory.startsWith(query.directory!)
-        );
+        sessions = sessions.filter(s => s.directory.startsWith(query.directory!));
       }
 
       // 按日期过滤
       if (query.afterDate || query.beforeDate) {
-        sessions = sessions.filter(s => 
-          isDateInRange(s.timestamp, query.afterDate, query.beforeDate)
+        sessions = sessions.filter(s =>
+          isDateInRange(s.timestamp, query.afterDate, query.beforeDate),
         );
       }
 
@@ -107,10 +51,11 @@ export class SearchService {
       // 按相关性排序
       results.sort((a, b) => b.relevanceScore - a.relevanceScore);
 
+      // 应用偏移量
+      const offsetResults = query.offset ? results.slice(query.offset) : results;
+
       // 应用限制
-      const limitedResults = query.limit 
-        ? results.slice(0, query.limit) 
-        : results;
+      const limitedResults = query.limit ? offsetResults.slice(0, query.limit) : offsetResults;
 
       // 保存搜索历史
       await this.saveSearchHistory(query);
@@ -128,19 +73,17 @@ export class SearchService {
   private async searchInSession(
     filePath: string,
     sessionId: string,
-    query: SearchQuery
+    query: SearchQuery,
   ): Promise<SearchResult[]> {
     const results: SearchResult[] = [];
 
     try {
       const events = await this.parserService.parseSessionFile(filePath);
-      const sessionDate = events.length > 0 
-        ? new Date(events[0].timestamp) 
-        : new Date();
+      const sessionDate = events.length > 0 ? new Date(events[0].timestamp) : new Date();
 
       for (let i = 0; i < events.length; i++) {
         const event = events[i];
-        
+
         // 按消息类型过滤
         if (query.messageType && query.messageType !== 'all') {
           if (query.messageType === 'user' && event.payload.type !== 'user_message') {
@@ -200,8 +143,6 @@ export class SearchService {
           return event.payload.arguments;
         case 'function_call_output':
           return event.payload.output;
-        case 'message':
-          return event.payload.content?.map(c => c.text).join(' ') || null;
         default:
           return null;
       }
@@ -216,7 +157,7 @@ export class SearchService {
   private matchContent(
     content: string,
     query: string,
-    useRegex?: boolean
+    useRegex?: boolean,
   ): { matchedText: string; context: string; score: number } | null {
     if (!content || !query) return null;
 
@@ -248,9 +189,8 @@ export class SearchService {
       if (lowerContent.includes(lowerQuery)) {
         matched = true;
         matchedText = query;
-        
+
         // 计算相关性分数
-        // 完全匹配得分更高
         if (lowerContent === lowerQuery) {
           score = 1;
         } else if (lowerContent.startsWith(lowerQuery)) {
@@ -309,14 +249,11 @@ export class SearchService {
    */
   async saveSearchHistory(query: SearchQuery): Promise<void> {
     this.searchHistory.unshift(query);
-    
+
     // 只保留最近 100 条
     if (this.searchHistory.length > 100) {
       this.searchHistory = this.searchHistory.slice(0, 100);
     }
-
-    // 可选：持久化到文件
-    // await this.persistSearchHistory();
   }
 
   /**
@@ -350,207 +287,3 @@ export class SearchService {
       .map(([term]) => term);
   }
 }
-```
-
----
-
-## 6.3 使用示例
-
-### 基本搜索
-
-```typescript
-import { SearchService } from '@/services/search';
-
-const searchService = new SearchService();
-
-// 简单搜索
-const results = await searchService.searchSessions({
-  query: 'database',
-});
-
-console.log(`Found ${results.length} results`);
-results.forEach(result => {
-  console.log(`  Session: ${result.sessionId}`);
-  console.log(`  Match: ${result.matchedText}`);
-  console.log(`  Context: ${result.context}`);
-  console.log('---');
-});
-```
-
-### 高级搜索
-
-```typescript
-import { SearchService } from '@/services/search';
-
-const searchService = new SearchService();
-
-// 带过滤条件的搜索
-const results = await searchService.searchSessions({
-  query: 'error',
-  directory: '/path/to/project',
-  afterDate: new Date('2026-04-01'),
-  beforeDate: new Date('2026-04-30'),
-  messageType: 'user',
-  limit: 10,
-});
-
-console.log(`Found ${results.length} results`);
-```
-
-### 正则表达式搜索
-
-```typescript
-import { SearchService } from '@/services/search';
-
-const searchService = new SearchService();
-
-// 正则表达式搜索
-const results = await searchService.searchSessions({
-  query: '\\berror\\b.*\\bfix\\b',
-  useRegex: true,
-});
-
-console.log(`Found ${results.length} results`);
-```
-
-### 高亮显示
-
-```typescript
-import { SearchService } from '@/services/search';
-
-const searchService = new SearchService();
-const results = await searchService.searchSessions({ query: 'bug' });
-
-// 高亮显示匹配文本
-results.forEach(result => {
-  const highlighted = searchService.highlightMatches(result.context, 'bug');
-  console.log(highlighted);
-});
-```
-
-### 搜索历史
-
-```typescript
-import { SearchService } from '@/services/search';
-
-const searchService = new SearchService();
-
-// 执行搜索
-await searchService.searchSessions({ query: 'database' });
-await searchService.searchSessions({ query: 'api' });
-await searchService.searchSessions({ query: 'database' });
-
-// 获取搜索历史
-const history = await searchService.getSearchHistory();
-console.log(`Search history: ${history.length} items`);
-
-// 获取热门搜索词
-const popular = await searchService.getPopularSearchTerms(5);
-console.log('Popular search terms:');
-popular.forEach(term => console.log(`  - ${term}`));
-
-// 清除搜索历史
-await searchService.clearSearchHistory();
-```
-
----
-
-## 6.4 搜索结果排序
-
-### 排序算法
-
-搜索结果按以下因素排序：
-
-1. **相关性分数** (0-1)
-   - 完全匹配：1.0
-   - 开头匹配：0.9
-   - 包含匹配：0.7
-   - 正则匹配：0.8
-
-2. **时间权重**
-   - 最近的 session 权重更高
-
-3. **消息类型权重**
-   - 用户消息权重略高
-
-### 自定义排序
-
-```typescript
-const results = await searchService.searchSessions({ query: 'test' });
-
-// 按时间排序
-results.sort((a, b) => 
-  b.sessionTimestamp.getTime() - a.sessionTimestamp.getTime()
-);
-
-// 按相关性排序
-results.sort((a, b) => b.relevanceScore - a.relevanceScore);
-```
-
----
-
-## 6.5 性能优化
-
-### 优化策略
-
-1. **早期过滤**
-   - 先按日期和目录过滤
-   - 减少需要搜索的 session 数量
-
-2. **索引**
-   - 建立关键词索引
-   - 加速搜索
-
-3. **并行搜索**
-   - 多个 session 并行搜索
-   - 使用 `Promise.all()`
-
-4. **缓存**
-   - 缓存搜索结果
-   - 避免重复搜索
-
-### 性能建议
-
-```typescript
-// 并行搜索
-const searchPromises = sessions.map(session => 
-  searchService.searchInSession(session.filePath, session.id, query)
-);
-const results = await Promise.all(searchPromises);
-```
-
----
-
-## 6.6 错误处理
-
-### 常见错误
-
-1. **正则表达式无效**
-   - 处理：回退到普通搜索
-   - 日志：warn 级别
-
-2. **文件读取失败**
-   - 处理：跳过该文件
-   - 日志：error 级别
-
-3. **内存溢出**
-   - 处理：限制结果数量
-   - 建议：使用 `limit` 选项
-
----
-
-## 完成标准
-
-- [x] SearchService 类已实现 ✅ 2026-04-30
-- [x] searchSessions 方法工作正常 ✅ 2026-04-30
-- [x] highlightMatches 方法工作正常 ✅ 2026-04-30
-- [x] 搜索历史管理已实现 ✅ 2026-04-30
-- [x] 支持正则表达式搜索 ✅ 2026-04-30
-- [x] 支持多种过滤条件 ✅ 2026-04-30
-- [x] 错误处理完善 ✅ 2026-04-30
-- [x] 有使用示例 ✅ 2026-04-30
-- [x] 无 TypeScript 编译错误 ✅ 2026-04-30
-
-## 下一步
-
-完成本文档后，继续进行 [07-导出服务](./07-导出服务.md)。

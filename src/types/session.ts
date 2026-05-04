@@ -228,4 +228,21 @@ export interface Config {
   showTimestamps: boolean;
   highlightMatches: boolean;
   language: 'zh' | 'en';
+  cacheEnabled?: boolean;
+  cacheTTL?: number;
+  maxFileSize?: number;
+  concurrentParsing?: number;
+}
+
+// Session 摘要
+export interface SessionSummary {
+  filePath: string;
+  summary: string;
+  directory: string;
+  startTime: Date;
+  endTime: Date;
+  duration: number;
+  userMessageCount: number;
+  agentMessageCount: number;
+  totalEvents: number;
 }
