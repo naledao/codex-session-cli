@@ -225,7 +225,7 @@ export class SessionService {
       const fileSize = stats.size;
 
       // 提取摘要和目录（从文件名和第一行推断）
-      const { summary, directory, messageCount } = await this.extractBasicInfo(filePath);
+      const { summary, directory, messageCount, duration } = await this.extractBasicInfo(filePath);
 
       return {
         id: sessionId,
@@ -234,7 +234,7 @@ export class SessionService {
         timestamp,
         summary,
         messageCount,
-        duration: 0,
+        duration,
         fileSize,
         tags: [],
       };
@@ -245,16 +245,19 @@ export class SessionService {
   }
 
   /**
-   * 提取基本信息（摘要、目录、消息数）
+   * 提取基本信息（摘要、目录、消息数、时长）
    */
   private async extractBasicInfo(filePath: string): Promise<{
     summary: string;
     directory: string;
     messageCount: number;
+    duration: number;
   }> {
     let summary = 'No summary';
     let directory = 'Unknown';
     let messageCount = 0;
+    let firstTimestamp: string | null = null;
+    let lastTimestamp: string | null = null;
 
     try {
       const content = await fs.readFile(filePath, 'utf-8');
@@ -264,6 +267,14 @@ export class SessionService {
         try {
           const event = JSON.parse(line);
           messageCount++;
+
+          // 记录时间戳
+          if (event.timestamp) {
+            if (!firstTimestamp) {
+              firstTimestamp = event.timestamp;
+            }
+            lastTimestamp = event.timestamp;
+          }
 
           // 提取第一条用户消息作为摘要
           if (summary === 'No summary' && event.payload?.type === 'user_message') {
@@ -283,7 +294,15 @@ export class SessionService {
       // 文件读取失败
     }
 
-    return { summary, directory, messageCount };
+    // 计算时长
+    let duration = 0;
+    if (firstTimestamp && lastTimestamp) {
+      const start = new Date(firstTimestamp).getTime();
+      const end = new Date(lastTimestamp).getTime();
+      duration = end - start;
+    }
+
+    return { summary, directory, messageCount, duration };
   }
 
   /**
