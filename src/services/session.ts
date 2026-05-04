@@ -54,20 +54,25 @@ export class SessionService {
     const allSessions = await this.getAllSessions();
 
     return allSessions.filter(session => {
-      // 如果目录未知，跳过
       if (!session.directory || session.directory === 'Unknown') {
         return false;
       }
 
       try {
-        // 规范化路径进行比较
-        const normalizedSessionDir = path.resolve(session.directory);
-        const normalizedCurrentDir = path.resolve(currentDir);
+        // 解析符号链接后再比较
+        const realSessionDir = fs.realpathSync(session.directory);
+        const realCurrentDir = fs.realpathSync(currentDir);
 
-        // 只显示精确匹配当前目录的 session
-        return normalizedSessionDir === normalizedCurrentDir;
+        return realSessionDir === realCurrentDir;
       } catch {
-        return false;
+        // fallback: 用 path.resolve 比较
+        try {
+          const normalizedSessionDir = path.resolve(session.directory);
+          const normalizedCurrentDir = path.resolve(currentDir);
+          return normalizedSessionDir === normalizedCurrentDir;
+        } catch {
+          return false;
+        }
       }
     });
   }

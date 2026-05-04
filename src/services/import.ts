@@ -34,10 +34,35 @@ export class ImportService {
       sessionData.session.directory = currentDir;
       sessionData.metadata.directory = currentDir;
       // 修改每个事件中的 cwd 字段
+      let hasExecEvent = false;
       for (const event of sessionData.events) {
         if (event.type === 'event_msg' && event.payload.type === 'exec_command_end') {
           (event.payload as any).cwd = currentDir;
+          hasExecEvent = true;
         }
+      }
+      // 如果没有 exec_command_end 事件，添加一个包含目录信息的事件
+      if (!hasExecEvent) {
+        sessionData.events.unshift({
+          timestamp: sessionData.events[0]?.timestamp || new Date().toISOString(),
+          type: 'event_msg',
+          payload: {
+            type: 'exec_command_end',
+            call_id: '',
+            turn_id: '',
+            command: [],
+            cwd: currentDir,
+            parsed_cmd: [],
+            source: 'agent',
+            stdout: '',
+            stderr: '',
+            aggregated_output: '',
+            exit_code: 0,
+            duration: { secs: 0, nanos: 0 },
+            formatted_output: '',
+            status: 'completed',
+          } as any,
+        });
       }
       const outputPath = await this.writeSession(sessionData);
 
