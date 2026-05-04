@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Box, Text, useApp, useInput, useStdin } from 'ink';
+import { Box, Text, useApp, useInput, useStdin, useStdout } from 'ink';
 import { spawn } from 'child_process';
 import { SessionService } from '../services/session';
 import { SearchService } from '../services/search';
@@ -16,6 +16,7 @@ interface AppProps {
 export const App: React.FC<AppProps> = ({ directory }) => {
   const { exit } = useApp();
   const { isRawModeSupported } = useStdin();
+  const { stdout } = useStdout();
 
   const [view, setView] = useState<View>('list');
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -24,23 +25,39 @@ export const App: React.FC<AppProps> = ({ directory }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // 搜索状态
   const [searchQuery, setSearchQuery] = useState('');
   const [searchInput, setSearchInput] = useState('');
   const [searchResults, setSearchResults] = useState<Session[]>([]);
   const [searchMode, setSearchMode] = useState<'all' | 'user' | 'agent'>('all');
 
-  // 导出状态
   const [exportIndex, setExportIndex] = useState(0);
   const [exporting, setExporting] = useState(false);
   const [exportMessage, setExportMessage] = useState('');
 
-  // 详情滚动
   const [scrollOffset, setScrollOffset] = useState(0);
 
   const sessionService = new SessionService();
   const searchService = new SearchService();
   const exportService = new ExportService();
+
+  // 进入 alternate screen 并清屏
+  useEffect(() => {
+    if (stdout) {
+      // 进入 alternate screen buffer
+      stdout.write('\x1b[?1049h');
+      // 清屏
+      stdout.write('\x1b[2J');
+      // 光标移到左上角
+      stdout.write('\x1b[H');
+    }
+
+    return () => {
+      // 退出时恢复主屏幕
+      if (stdout) {
+        stdout.write('\x1b[?1049l');
+      }
+    };
+  }, [stdout]);
 
   // 加载 session 列表
   useEffect(() => {
@@ -71,17 +88,14 @@ export const App: React.FC<AppProps> = ({ directory }) => {
   useInput((input, key) => {
     if (!isRawModeSupported) return;
 
-    // 全局退出
     if (input === 'q' && view !== 'search') {
       exit();
     }
 
-    // 清除错误
     if (error && (key.escape || input === 'r')) {
       setError(null);
     }
 
-    // 列表视图
     if (view === 'list') {
       const displaySessions = searchQuery ? searchResults : sessions;
 
@@ -106,7 +120,6 @@ export const App: React.FC<AppProps> = ({ directory }) => {
       }
     }
 
-    // 详情视图
     if (view === 'detail') {
       if (key.escape) {
         setView('list');
@@ -128,7 +141,6 @@ export const App: React.FC<AppProps> = ({ directory }) => {
       }
     }
 
-    // 搜索视图
     if (view === 'search') {
       if (key.escape) {
         setView('list');
@@ -144,7 +156,6 @@ export const App: React.FC<AppProps> = ({ directory }) => {
       }
     }
 
-    // 导出视图
     if (view === 'export') {
       if (key.escape) {
         setView(selectedSession ? 'detail' : 'list');
@@ -159,7 +170,6 @@ export const App: React.FC<AppProps> = ({ directory }) => {
     }
   });
 
-  // 选择 session
   const handleSelectSession = async (session: Session) => {
     try {
       setLoading(true);
@@ -179,10 +189,8 @@ export const App: React.FC<AppProps> = ({ directory }) => {
     }
   };
 
-  // 用 codex resume 打开 session
   const handleResumeSession = (session: Session) => {
     try {
-      // 从 session.id 提取 UUID (格式: rollout-2025-09-17T23-45-00-96615318-295d-4d56-8b79-c1c04b1fcdae)
       const uuid = session.id.split('-').slice(-5).join('-');
       const child = spawn('cmd', ['/c', 'start', 'cmd', '/k', `codex resume ${uuid}`], {
         detached: true,
@@ -195,7 +203,6 @@ export const App: React.FC<AppProps> = ({ directory }) => {
     }
   };
 
-  // 搜索
   const handleSearch = async () => {
     if (!searchInput.trim()) return;
 
@@ -230,7 +237,6 @@ export const App: React.FC<AppProps> = ({ directory }) => {
     }
   };
 
-  // 导出
   const handleExport = (session: Session) => {
     setExportIndex(0);
     setExporting(false);
@@ -243,7 +249,6 @@ export const App: React.FC<AppProps> = ({ directory }) => {
     const format = formats[exportIndex];
 
     if (format === undefined) {
-      // 取消
       setView(selectedSession ? 'detail' : 'list');
       return;
     }
@@ -258,29 +263,40 @@ export const App: React.FC<AppProps> = ({ directory }) => {
       const fileName = `session-${sessionId.substring(0, 20)}.${format === 'markdown' ? 'md' : format}`;
       const outputPath = `${process.cwd()}/${fileName}`;
 
-      // 保存到文件
       const fs = await import('fs-extra');
       await fs.default.writeFile(outputPath, content, 'utf-8');
 
-      setExportMessage(`✓ 已导出: ${outputPath}`);
+      setExportMessage(`已导出: ${outputPath}`);
       setTimeout(() => {
         setView(selectedSession ? 'detail' : 'list');
         setExportMessage('');
       }, 2000);
     } catch (err) {
-      setExportMessage(`✗ 导出失败: ${err instanceof Error ? err.message : '未知错误'}`);
+      setExportMessage(`导出失败: ${err instanceof Error ? err.message : '未知错误'}`);
     } finally {
       setExporting(false);
     }
   };
 
-  // 渲染列表视图
-  const renderList = () => {
+  const renderHeader = () => (
+    <Box borderStyle="round" borderColor="cyan" paddingX={1} width="100%">
+      <Text bold color="cyan">
+        Codex Session Viewer
+      </Text>
+      <Text color="gray"> | {directory || process.cwd()}</Text>
+      <Box flexGrow={1} />
+      <Text color="gray">
+        {searchQuery ? `搜索: "${searchQuery}"` : `${sessions.length} 个会话`}
+      </Text>
+    </Box>
+  );
+
+  const renderSessionList = () => {
     const displaySessions = searchQuery ? searchResults : sessions;
 
     if (loading) {
       return (
-        <Box justifyContent="center" alignItems="center" height={10}>
+        <Box justifyContent="center" alignItems="center" height="100%">
           <Text color="yellow">加载中...</Text>
         </Box>
       );
@@ -288,10 +304,10 @@ export const App: React.FC<AppProps> = ({ directory }) => {
 
     if (error) {
       return (
-        <Box flexDirection="column" justifyContent="center" alignItems="center" height={10}>
-          <Text color="red">✗ {error}</Text>
+        <Box flexDirection="column" justifyContent="center" alignItems="center" height="100%">
+          <Text color="red">{error}</Text>
           <Box marginTop={1}>
-            <Text color="gray">按 r 重试，按 Esc 清除错误</Text>
+            <Text color="gray">按 r 重试</Text>
           </Box>
         </Box>
       );
@@ -299,15 +315,13 @@ export const App: React.FC<AppProps> = ({ directory }) => {
 
     if (displaySessions.length === 0) {
       return (
-        <Box flexDirection="column" justifyContent="center" alignItems="center" height={10}>
+        <Box flexDirection="column" justifyContent="center" alignItems="center" height="100%">
           <Text color="yellow">
-            {searchQuery ? `未找到匹配 "${searchQuery}" 的 session` : '未找到 session'}
+            {searchQuery ? `未找到匹配 "${searchQuery}" 的会话` : '未找到会话'}
           </Text>
           <Box marginTop={1}>
             <Text color="gray">
-              {searchQuery
-                ? '尝试不同的关键词或按 Esc 清除搜索'
-                : '请确保 ~/.codex/sessions 目录存在'}
+              {searchQuery ? '按 Esc 清除搜索' : '请确保 ~/.codex/sessions 目录存在'}
             </Text>
           </Box>
         </Box>
@@ -316,20 +330,17 @@ export const App: React.FC<AppProps> = ({ directory }) => {
 
     return (
       <Box flexDirection="column">
-        <Box paddingX={1} marginBottom={1}>
-          <Text color="gray">
-            {searchQuery
-              ? `搜索结果: ${displaySessions.length} 个`
-              : `共 ${displaySessions.length} 个 session`}
-          </Text>
-        </Box>
         {displaySessions.map((session, index) => (
           <Box key={session.id} paddingX={1}>
-            <Text color={index === selectedIndex ? 'cyan' : 'white'} bold={index === selectedIndex}>
-              {index === selectedIndex ? '▸ ' : '  '}
+            <Text
+              color={index === selectedIndex ? 'cyan' : 'white'}
+              bold={index === selectedIndex}
+              inverse={index === selectedIndex}
+            >
+              {index === selectedIndex ? ' > ' : '   '}
               {formatDate(session.timestamp, 'yyyy-MM-dd HH:mm')}
               {' - '}
-              {session.summary.substring(0, 50)}
+              {session.summary.substring(0, 40)}
             </Text>
           </Box>
         ))}
@@ -337,26 +348,63 @@ export const App: React.FC<AppProps> = ({ directory }) => {
     );
   };
 
-  // 渲染详情视图
-  const renderDetail = () => {
-    if (!selectedSession) return null;
+  const renderSessionDetail = () => {
+    if (!selectedSession) {
+      // 显示预览
+      const displaySessions = searchQuery ? searchResults : sessions;
+      const session = displaySessions[selectedIndex];
+
+      if (!session) {
+        return (
+          <Box justifyContent="center" alignItems="center" height="100%">
+            <Text color="gray">选择一个会话查看详情</Text>
+          </Box>
+        );
+      }
+
+      return (
+        <Box flexDirection="column" padding={1}>
+          <Text bold color="cyan">
+            会话预览
+          </Text>
+          <Box marginTop={1} flexDirection="column">
+            <Text>
+              <Text color="yellow">时间:</Text> {formatDate(session.timestamp)}
+            </Text>
+            <Text>
+              <Text color="yellow">目录:</Text> {session.directory}
+            </Text>
+            <Text>
+              <Text color="yellow">消息:</Text> {session.messageCount} 条
+            </Text>
+            <Text>
+              <Text color="yellow">时长:</Text> {formatDuration(session.duration)}
+            </Text>
+          </Box>
+          <Box marginTop={1}>
+            <Text color="gray">按 Enter 查看完整内容</Text>
+          </Box>
+        </Box>
+      );
+    }
 
     const totalEvents = selectedSession.events.length;
-    const visibleEvents = selectedSession.events.slice(scrollOffset, scrollOffset + 20);
+    const visibleEvents = selectedSession.events.slice(scrollOffset, scrollOffset + 15);
     const scrollPercent = totalEvents > 0 ? Math.round((scrollOffset / totalEvents) * 100) : 0;
 
     return (
-      <Box flexDirection="column" height="100%">
-        {/* 固定头部 */}
-        <Box borderStyle="single" paddingX={1} marginBottom={1}>
-          <Text bold>Session: {formatDate(selectedSession.timestamp)}</Text>
-          <Text color="gray"> | 目录: {selectedSession.directory}</Text>
-          <Text color="gray"> | 时长: {formatDuration(selectedSession.duration)}</Text>
-          <Text color="gray"> | 消息: {selectedSession.messageCount}条</Text>
-          {totalEvents > 20 && <Text color="gray"> | 滚动: {scrollPercent}%</Text>}
+      <Box flexDirection="column">
+        <Box paddingX={1} marginBottom={1}>
+          <Text bold color="cyan">
+            会话详情
+          </Text>
+          <Text color="gray"> | {formatDate(selectedSession.timestamp)}</Text>
+          <Box flexGrow={1} />
+          <Text color="gray">
+            {scrollPercent}% | {scrollOffset + 1}/{totalEvents}
+          </Text>
         </Box>
 
-        {/* 可滚动内容区域 */}
         <Box flexDirection="column" flexGrow={1}>
           {visibleEvents.map((event, index) => {
             const timestamp = formatDate(new Date(event.timestamp), 'HH:mm:ss');
@@ -390,7 +438,7 @@ export const App: React.FC<AppProps> = ({ directory }) => {
                     </Text>
                     <Text>$ {event.payload.command.join(' ')}</Text>
                     {event.payload.stdout && (
-                      <Text color="gray">{event.payload.stdout.substring(0, 200)}</Text>
+                      <Text color="gray">{event.payload.stdout.substring(0, 150)}</Text>
                     )}
                   </Box>
                 );
@@ -400,7 +448,7 @@ export const App: React.FC<AppProps> = ({ directory }) => {
             if (event.type === 'response_item' && event.payload.type === 'function_call') {
               return (
                 <Box key={index} flexDirection="column" marginBottom={1} paddingX={1}>
-                  <Text color="cyan" bold>
+                  <Text color="magenta" bold>
                     [工具] {timestamp} - {event.payload.name}
                   </Text>
                 </Box>
@@ -414,110 +462,107 @@ export const App: React.FC<AppProps> = ({ directory }) => {
     );
   };
 
-  // 渲染搜索视图
-  const renderSearch = () => {
-    return (
-      <Box flexDirection="column" borderStyle="single" padding={1}>
-        <Text bold>搜索 Session</Text>
-        <Box marginTop={1}>
-          <Text>关键词: {searchInput}</Text>
-          <Text color="gray">_</Text>
-        </Box>
-        <Box marginTop={1}>
-          <Text color="gray">
-            选项: [r] 模式:{' '}
-            {searchMode === 'all' ? '全部' : searchMode === 'user' ? '用户消息' : '代理消息'}
-          </Text>
-        </Box>
-        <Box marginTop={1}>
-          <Text color="gray">输入关键词后按 Enter 搜索，按 Esc 取消</Text>
-        </Box>
+  const renderSearchPanel = () => (
+    <Box flexDirection="column" borderStyle="double" borderColor="yellow" padding={1} width="100%">
+      <Text bold color="yellow">
+        搜索会话
+      </Text>
+      <Box marginTop={1}>
+        <Text>关键词: {searchInput}</Text>
+        <Text color="gray">_</Text>
       </Box>
-    );
-  };
+      <Box marginTop={1}>
+        <Text color="gray">
+          模式: {searchMode === 'all' ? '全部' : searchMode === 'user' ? '用户消息' : '代理消息'} |
+          按 r 切换
+        </Text>
+      </Box>
+      <Box marginTop={1}>
+        <Text color="gray">Enter: 搜索 | Esc: 取消</Text>
+      </Box>
+    </Box>
+  );
 
-  // 渲染导出视图
-  const renderExport = () => {
+  const renderExportPanel = () => {
     const formats = ['JSON 格式', '纯文本格式', 'Markdown 格式', 'CSV 格式', '取消'];
 
     return (
-      <Box flexDirection="column" borderStyle="single" padding={1}>
-        <Text bold>导出 Session</Text>
+      <Box flexDirection="column" borderStyle="double" borderColor="green" padding={1} width="100%">
+        <Text bold color="green">
+          导出会话
+        </Text>
         {exportMessage ? (
           <Box marginTop={1}>
-            <Text color={exportMessage.startsWith('✓') ? 'green' : 'red'}>{exportMessage}</Text>
+            <Text color={exportMessage.startsWith('已') ? 'green' : 'red'}>{exportMessage}</Text>
           </Box>
         ) : exporting ? (
           <Box marginTop={1}>
             <Text color="yellow">导出中...</Text>
           </Box>
         ) : (
-          <>
-            <Box marginTop={1}>
-              <Text>选择导出格式:</Text>
-            </Box>
-            <Box flexDirection="column" marginTop={1}>
-              {formats.map((format, index) => (
-                <Text key={index} color={index === exportIndex ? 'cyan' : 'white'}>
-                  {index === exportIndex ? '▸ ' : '  '}
-                  {format}
-                </Text>
-              ))}
-            </Box>
-          </>
+          <Box flexDirection="column" marginTop={1}>
+            {formats.map((format, index) => (
+              <Text
+                key={index}
+                color={index === exportIndex ? 'green' : 'white'}
+                bold={index === exportIndex}
+              >
+                {index === exportIndex ? ' > ' : '   '}
+                {format}
+              </Text>
+            ))}
+          </Box>
         )}
       </Box>
     );
   };
 
-  // 渲染底部状态栏
   const renderFooter = () => {
     const shortcuts = {
-      list: '↑↓: 导航 | Enter: 查看 | c: Codex打开 | /: 搜索 | e: 导出 | r: 刷新 | q: 退出',
-      detail: '↑↓: 滚动 | Esc: 返回 | c: Codex打开 | /: 搜索 | e: 导出 | q: 退出',
-      search: '输入关键词 | Enter: 搜索 | r: 切换模式 | Esc: 取消',
-      export: '↑↓: 选择 | Enter: 确认 | Esc: 取消',
+      list: '↑↓ 导航 | Enter 查看 | c Codex打开 | / 搜索 | e 导出 | r 刷新 | q 退出',
+      detail: '↑↓ 滚动 | Esc 返回 | c Codex打开 | / 搜索 | e 导出 | q 退出',
+      search: 'Enter 搜索 | r 切换模式 | Esc 取消',
+      export: '↑↓ 选择 | Enter 确认 | Esc 取消',
     };
 
     return (
-      <Box borderStyle="single" paddingX={1}>
+      <Box borderStyle="round" borderColor="gray" paddingX={1} width="100%">
         <Text color="gray">{shortcuts[view]}</Text>
       </Box>
     );
   };
 
-  // 渲染标题
-  const renderHeader = () => {
-    const title =
-      view === 'list'
-        ? searchQuery
-          ? `搜索: "${searchQuery}"`
-          : 'Codex Session Viewer'
-        : view === 'detail'
-          ? 'Session 详情'
-          : view === 'search'
-            ? '搜索'
-            : '导出';
-
-    return (
-      <Box borderStyle="double" paddingX={1} marginBottom={1}>
-        <Text bold color="cyan">
-          {title}
-        </Text>
-        <Text color="gray"> - {directory || process.cwd()}</Text>
-      </Box>
-    );
-  };
-
   return (
-    <Box flexDirection="column" height="100%">
+    <Box flexDirection="column" width="100%" height="100%">
       {renderHeader()}
 
-      <Box flexDirection="column" flexGrow={1}>
-        {view === 'list' && renderList()}
-        {view === 'detail' && renderDetail()}
-        {view === 'search' && renderSearch()}
-        {view === 'export' && renderExport()}
+      <Box flexDirection="row" flexGrow={1}>
+        {/* 左侧面板 - Session 列表 */}
+        <Box
+          flexDirection="column"
+          width="40%"
+          borderStyle="single"
+          borderColor="blue"
+          marginRight={1}
+        >
+          <Box paddingX={1} borderBottom>
+            <Text bold color="blue">
+              会话列表
+            </Text>
+          </Box>
+          <Box flexDirection="column" flexGrow={1} overflowY="hidden">
+            {renderSessionList()}
+          </Box>
+        </Box>
+
+        {/* 右侧面板 - 详情/搜索/导出 */}
+        <Box flexDirection="column" flexGrow={1} borderStyle="single" borderColor="blue">
+          {view === 'search'
+            ? renderSearchPanel()
+            : view === 'export'
+              ? renderExportPanel()
+              : renderSessionDetail()}
+        </Box>
       </Box>
 
       {renderFooter()}
