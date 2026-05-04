@@ -182,7 +182,9 @@ export const App: React.FC<AppProps> = ({ directory }) => {
   // 用 codex resume 打开 session
   const handleResumeSession = (session: Session) => {
     try {
-      const child = spawn('cmd', ['/c', 'start', 'cmd', '/k', 'codex resume'], {
+      // 从 session.id 提取 UUID (格式: rollout-2025-09-17T23-45-00-96615318-295d-4d56-8b79-c1c04b1fcdae)
+      const uuid = session.id.split('-').slice(-5).join('-');
+      const child = spawn('cmd', ['/c', 'start', 'cmd', '/k', `codex resume ${uuid}`], {
         detached: true,
         stdio: 'ignore',
         shell: true,
