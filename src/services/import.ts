@@ -30,8 +30,15 @@ export class ImportService {
 
       const sessionData = this.createSessionData(events);
       // 将目录设置为当前目录
-      sessionData.session.directory = process.cwd();
-      sessionData.metadata.directory = process.cwd();
+      const currentDir = process.cwd();
+      sessionData.session.directory = currentDir;
+      sessionData.metadata.directory = currentDir;
+      // 修改每个事件中的 cwd 字段
+      for (const event of sessionData.events) {
+        if (event.type === 'event_msg' && event.payload.type === 'exec_command_end') {
+          (event.payload as any).cwd = currentDir;
+        }
+      }
       const outputPath = await this.writeSession(sessionData);
 
       this.logger.info(`Imported session to: ${outputPath}`);
