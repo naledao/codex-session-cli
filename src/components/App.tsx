@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Box, Text, useApp, useInput, useStdin, useStdout } from 'ink';
 import { spawn } from 'child_process';
+import clipboard from 'clipboardy';
 import { SessionService } from '../services/session';
 import { SearchService } from '../services/search';
 import { ExportService } from '../services/export';
@@ -38,6 +39,8 @@ export const App: React.FC<AppProps> = ({ directory }) => {
   const [importing, setImporting] = useState(false);
   const [importInput, setImportInput] = useState('');
   const [importMessage, setImportMessage] = useState('');
+
+  const [copyMessage, setCopyMessage] = useState('');
 
   const [scrollOffset, setScrollOffset] = useState(0);
 
@@ -120,6 +123,8 @@ export const App: React.FC<AppProps> = ({ directory }) => {
         setSearchInput('');
       } else if (input === 'e' && displaySessions[selectedIndex]) {
         handleExport(displaySessions[selectedIndex]);
+      } else if (input === 'y' && displaySessions[selectedIndex]) {
+        handleCopyCommand(displaySessions[selectedIndex]);
       } else if (input === 'i') {
         setView('import');
         setImportInput('');
@@ -145,6 +150,8 @@ export const App: React.FC<AppProps> = ({ directory }) => {
         handleResumeSession(selectedSession);
       } else if (input === 'e' && selectedSession) {
         handleExport(selectedSession);
+      } else if (input === 'y' && selectedSession) {
+        handleCopyCommand(selectedSession);
       } else if (input === '/') {
         setView('search');
         setSearchInput('');
@@ -327,6 +334,19 @@ export const App: React.FC<AppProps> = ({ directory }) => {
     }
   };
 
+  const handleCopyCommand = async (session: Session) => {
+    try {
+      const uuid = session.id.split('-').slice(-5).join('-');
+      const command = `codex resume ${uuid}`;
+      await clipboard.write(command);
+      setCopyMessage(`已复制: ${command}`);
+      setTimeout(() => setCopyMessage(''), 2000);
+    } catch (err) {
+      setCopyMessage('复制失败');
+      setTimeout(() => setCopyMessage(''), 2000);
+    }
+  };
+
   const renderHeader = () => (
     <Box borderStyle="round" borderColor="cyan" paddingX={1} width="100%">
       <Text bold color="cyan">
@@ -334,9 +354,13 @@ export const App: React.FC<AppProps> = ({ directory }) => {
       </Text>
       <Text color="gray"> | {directory || process.cwd()}</Text>
       <Box flexGrow={1} />
-      <Text color="gray">
-        {searchQuery ? `搜索: "${searchQuery}"` : `${sessions.length} 个会话`}
-      </Text>
+      {copyMessage ? (
+        <Text color="green">{copyMessage}</Text>
+      ) : (
+        <Text color="gray">
+          {searchQuery ? `搜索: "${searchQuery}"` : `${sessions.length} 个会话`}
+        </Text>
+      )}
     </Box>
   );
 
@@ -601,8 +625,8 @@ export const App: React.FC<AppProps> = ({ directory }) => {
 
   const renderFooter = () => {
     const shortcuts = {
-      list: '↑↓ 导航 | Enter 查看 | c Codex打开 | / 搜索 | e 导出 | i 导入 | r 刷新 | q 退出',
-      detail: '↑↓ 滚动 | Esc 返回 | c Codex打开 | / 搜索 | e 导出 | q 退出',
+      list: '↑↓ 导航 | Enter 查看 | c Codex打开 | y 复制命令 | / 搜索 | e 导出 | i 导入 | r 刷新 | q 退出',
+      detail: '↑↓ 滚动 | Esc 返回 | c Codex打开 | y 复制命令 | / 搜索 | e 导出 | q 退出',
       search: 'Enter 搜索 | r 切换模式 | Esc 取消',
       export: '↑↓ 选择 | Enter 确认 | Esc 取消',
       import: '输入文件路径 | Enter 确认 | Esc 取消',
