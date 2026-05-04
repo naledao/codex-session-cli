@@ -1,99 +1,186 @@
 # Codex Session Viewer
 
-一个跨平台的终端工具，用于查看OpenAI Codex CLI在当前目录下的历史session记录。
+一个交互式终端工具，用于查看、搜索和导出 OpenAI Codex CLI 的历史 session 记录。
 
 ## 功能特性
 
-- 📋 **列出所有session** - 显示当前目录下所有codex cli的历史session列表
-- 🔍 **查看session详情** - 查看特定session的详细内容和交互记录
-- 🔎 **搜索session** - 根据关键词或时间范围搜索session
-- 📤 **导出session** - 将session导出为文件（如JSON、文本、Markdown等）
-- 🎨 **交互式TUI** - 带颜色的格式化输出和交互式终端界面
+- 🖥️ **交互式终端界面** - 全键盘操作，无需记忆命令
+- 📋 **Session 列表** - 浏览当前目录的所有 session
+- 📖 **Session 详情** - 查看完整的对话内容
+- 🔍 **全文搜索** - 支持关键词和正则搜索
+- 📤 **多格式导出** - JSON、纯文本、Markdown、CSV
+- 🌈 **彩色显示** - 带颜色的消息类型标识
+- 💻 **跨平台** - 支持 Windows、macOS、Linux
 
 ## 安装
 
 ```bash
-npm install -g codex-session-viewer
+npm install -g codex-session-cli
 ```
 
-## 快速开始
+## 使用
 
-### 查看当前目录的session列表
+### 启动
+
 ```bash
-codex-sessions list
+# 进入你的项目目录
+cd /path/to/your/project
+
+# 启动工具（显示当前目录的 session）
+codex-sessions
+
+# 或指定目录
+codex-sessions --dir /path/to/project
 ```
 
-### 启动交互式TUI界面
-```bash
-codex-sessions tui
+### 键盘快捷键
+
+#### Session 列表
+
+| 快捷键 | 功能 |
+|--------|------|
+| `↑` / `↓` | 导航列表 |
+| `Enter` | 查看选中的 session |
+| `/` | 搜索 |
+| `e` | 导出 |
+| `r` | 刷新列表 |
+| `q` | 退出 |
+
+#### Session 详情
+
+| 快捷键 | 功能 |
+|--------|------|
+| `↑` / `↓` | 滚动内容 |
+| `Esc` | 返回列表 |
+| `e` | 导出 |
+| `/` | 搜索 |
+| `q` | 退出 |
+
+#### 搜索
+
+| 快捷键 | 功能 |
+|--------|------|
+| `Enter` | 搜索 |
+| `r` | 切换搜索模式（全部/用户消息/代理消息） |
+| `Esc` | 取消 |
+
+#### 导出
+
+| 快捷键 | 功能 |
+|--------|------|
+| `↑` / `↓` | 选择格式 |
+| `Enter` | 确认导出 |
+| `Esc` | 取消 |
+
+## 界面预览
+
+### Session 列表
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Codex Session Viewer - /home/user/project                  │
+├─────────────────────────────────────────────────────────────┤
+│  共 5 个 session                                             │
+│                                                              │
+│  ▸ 2026-04-02 10:00 - 用户询问数据库迁移问题                │
+│    2026-04-02 15:54 - 讨论 API 接口设计                     │
+│    2026-04-07 13:20 - 前端组件开发调试                       │
+│    2026-04-10 17:17 - 部署配置问题排查                       │
+│    2026-04-13 14:30 - 性能优化讨论                           │
+├─────────────────────────────────────────────────────────────┤
+│  ↑↓: 导航  Enter: 查看  /: 搜索  e: 导出  q: 退出           │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-### 搜索包含特定关键词的session
-```bash
-codex-sessions search "bug"
+### Session 详情
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Session: 2026-04-02 10:00  | 目录: /home/user/project      │
+│  | 时长: 5m 23s  | 消息: 12条  | 滚动: 13%                  │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  [用户] 10:00:15                                             │
+│  如何迁移数据库？                                            │
+│                                                              │
+│  [代理] 10:00:20                                             │
+│  我来帮您查看当前的数据库结构...                             │
+│                                                              │
+│  [命令] 10:00:25 - shell_command                             │
+│  $ ls -la migrations/                                        │
+│                                                              │
+│  [代理] 10:00:30                                             │
+│  找到了迁移文件，我来创建新的迁移...                         │
+├─────────────────────────────────────────────────────────────┤
+│  ↑↓: 滚动  Esc: 返回  /: 搜索  e: 导出  q: 退出             │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-### 导出session为JSON文件
-```bash
-codex-sessions export <session-id> --format json --output session.json
+## 导出格式
+
+### JSON
+
+```json
+{
+  "id": "rollout-2026-04-02T10-00-10-uuid",
+  "timestamp": "2026-04-02T10:00:10.000Z",
+  "directory": "/home/user/project",
+  "duration": 300000,
+  "messageCount": 12,
+  "events": [...]
+}
 ```
 
-## 命令行接口
+### Markdown
 
-### 基本命令
+```markdown
+# Session: 2026-04-02 10:00
 
-```bash
-# 列出当前目录的session
-codex-sessions list [options]
+## Metadata
 
-# 查看特定session详情
-codex-sessions view <session-id>
+| Key | Value |
+|-----|-------|
+| ID | rollout-2026-04-02T10-00-10-uuid |
+| 目录 | /home/user/project |
+| 时长 | 5m 0s |
+| 消息数 | 12 |
 
-# 搜索session
-codex-sessions search <query> [options]
+## 对话内容
 
-# 导出session
-codex-sessions export <session-id> [options]
+#### 用户 (10:00:15)
+如何迁移数据库？
 
-# 启动交互式TUI
-codex-sessions tui
+#### 代理 (10:00:20)
+我来帮您查看当前的数据库结构...
 ```
 
-### 命令选项
+## Session 存储位置
 
-#### list 命令
-```bash
-codex-sessions list --all          # 显示所有目录的session
-codex-sessions list --limit 10     # 限制显示数量
-codex-sessions list --sort date    # 按日期排序
 ```
-
-#### search 命令
-```bash
-codex-sessions search "关键词" --regex     # 使用正则表达式
-codex-sessions search "关键词" --after 2026-04-01  # 时间范围过滤
-codex-sessions search "关键词" --type user  # 按消息类型过滤
-```
-
-#### export 命令
-```bash
-codex-sessions export <id> --format json    # JSON格式
-codex-sessions export <id> --format text    # 纯文本格式
-codex-sessions export <id> --format md      # Markdown格式
-codex-sessions export <id> --output file.json  # 输出到文件
+~/.codex/sessions/
+├── 2026/
+│   ├── 04/
+│   │   ├── 02/
+│   │   │   ├── rollout-2026-04-02T10-00-10-uuid.jsonl
+│   │   │   └── rollout-2026-04-02T15-54-55-uuid.jsonl
+│   │   └── 03/
+│   └── 03/
+└── 2025/
 ```
 
 ## 开发
 
 ### 环境要求
+
 - Node.js 18+
 - npm 9+
 
 ### 开发设置
+
 ```bash
 # 克隆仓库
-git clone https://github.com/yourusername/codex-session-viewer.git
-cd codex-session-viewer
+git clone https://github.com/naledao/codex-session-cli.git
+cd codex-session-cli
 
 # 安装依赖
 npm install
@@ -101,89 +188,47 @@ npm install
 # 运行测试
 npm test
 
-# 启动开发模式
-npm run dev
-```
-
-### 构建
-```bash
+# 构建
 npm run build
+
+# 本地运行
+node dist/index.mjs
 ```
 
-### 发布
-```bash
-npm publish
+### 项目结构
+
+```
+src/
+├── index.ts              # 入口文件
+├── components/
+│   └── App.tsx           # 主应用组件
+├── services/
+│   ├── session.ts        # Session 数据服务
+│   ├── parser.ts         # JSONL 解析
+│   ├── search.ts         # 搜索服务
+│   └── export.ts         # 导出服务
+├── utils/
+│   ├── path.ts           # 路径工具
+│   ├── format.ts         # 格式化工具
+│   └── logger.ts         # 日志工具
+└── types/
+    └── index.ts          # 类型定义
 ```
 
 ## 技术栈
 
 - **运行时**: Node.js 18+
-- **语言**: TypeScript 5.x
-- **CLI框架**: commander.js
-- **TUI框架**: ink (React for CLI)
-- **颜色输出**: chalk
-- **文件系统**: fs-extra
-- **JSON解析**: jsonstream
+- **语言**: TypeScript
+- **TUI 框架**: Ink (React for CLI)
 - **日期处理**: date-fns
-- **测试框架**: vitest
-
-## 项目结构
-
-```
-codex-session-viewer/
-├── src/
-│   ├── commands/           # 命令实现
-│   ├── components/         # TUI组件
-│   ├── services/           # 业务逻辑服务
-│   ├── utils/              # 工具函数
-│   └── types/              # TypeScript类型定义
-├── tests/                  # 测试文件
-├── docs/                   # 文档
-├── package.json            # 项目配置
-└── README.md               # 项目说明
-```
-
-## 配置
-
-配置文件位置：`~/.codex-session-viewer/config.json`
-
-```json
-{
-  "sessionsPath": "~/.codex/sessions",
-  "defaultExportFormat": "json",
-  "maxResults": 50,
-  "theme": "default",
-  "dateFormat": "yyyy-MM-dd HH:mm",
-  "showTimestamps": true,
-  "highlightMatches": true
-}
-```
-
-## 贡献
-
-欢迎贡献！请阅读 [贡献指南](CONTRIBUTING.md) 了解如何参与项目开发。
-
-### 贡献步骤
-1. Fork 项目
-2. 创建功能分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 打开 Pull Request
+- **文件操作**: fs-extra
 
 ## 许可证
 
-本项目采用 MIT 许可证 - 查看 [LICENSE](LICENSE) 文件了解详情
+MIT License
 
-## 致谢
+## 相关链接
 
-- 感谢 OpenAI 提供的 Codex CLI 工具
-- 感谢所有贡献者的支持
-
-## 联系方式
-
-- 项目链接: https://github.com/yourusername/codex-session-viewer
-- 问题反馈: https://github.com/yourusername/codex-session-viewer/issues
-
-## 更新日志
-
-查看 [CHANGELOG.md](CHANGELOG.md) 了解版本更新历史。
+- [npm 包](https://www.npmjs.com/package/codex-session-cli)
+- [GitHub 仓库](https://github.com/naledao/codex-session-cli)
+- [Codex CLI](https://github.com/openai/codex)
