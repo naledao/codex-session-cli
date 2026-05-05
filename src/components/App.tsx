@@ -343,16 +343,18 @@ export const App: React.FC<AppProps> = ({ directory }) => {
   };
 
   const handleCopyCommand = async (session: Session) => {
+    const uuid = session.id.split('-').slice(-5).join('-');
+    const currentDir = process.cwd();
+    const command = `codex resume ${uuid} -C "${currentDir}"`;
     try {
-      const uuid = session.id.split('-').slice(-5).join('-');
-      const currentDir = process.cwd();
-      const command = `codex resume ${uuid} -C "${currentDir}"`;
       await clipboard.write(command);
       setCopyMessage(`已复制: ${command}`);
-      setTimeout(() => setCopyMessage(''), 2000);
-    } catch (err) {
-      setCopyMessage('复制失败');
-      setTimeout(() => setCopyMessage(''), 2000);
+      setTimeout(() => setCopyMessage(''), 3000);
+    } catch {
+      // 剪贴板不可用（无头服务器等），输出到 stderr 供用户手动复制
+      process.stderr.write(`\n${command}\n`);
+      setCopyMessage(`请手动复制: ${command}`);
+      setTimeout(() => setCopyMessage(''), 5000);
     }
   };
 
