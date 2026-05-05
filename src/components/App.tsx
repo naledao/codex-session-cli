@@ -130,6 +130,7 @@ export const App: React.FC<AppProps> = ({ directory }) => {
         setImportInput('');
         setImportMessage('');
       } else if (input === 'r') {
+        sessionService.clearCache();
         loadSessions();
         setSearchQuery('');
       }
@@ -325,6 +326,7 @@ export const App: React.FC<AppProps> = ({ directory }) => {
 
       if (result.success) {
         setImportMessage('导入成功！');
+        sessionService.clearCache();
         await loadSessions();
         setTimeout(() => {
           setView('list');
